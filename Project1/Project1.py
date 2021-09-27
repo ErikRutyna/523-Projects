@@ -5,10 +5,41 @@ import math as mp
 import matplotlib.pyplot as plt
 
 def main():
-    N = 2
-    Psi = streamSolver(N)
-    xField, yField, infField = velocityFieldGenerator(Psi, N)
-    contourPlotter(Psi, xField, yField, infField, N)
+    N = [0, 1, 2, 5]
+    Psi = []
+    xField = []
+    yField = []
+    uinfField = []
+    pressCoeff = []
+    tangentVel = []
+    dragCoeff = []
+
+    for i in range(len(N)): 
+        psiTemp = streamSolver(N[i])
+        xFieldTemp, yFieldTemp, uinfFieldTemp = velocityFieldGenerator(psiTemp, N[i])
+        pTemp, tTemp = pressureCoeff(xFieldTemp, yFieldTemp, N[i])
+        dragCoeffTemp = wallDragCoeff(pTemp, N[i])
+
+        # Pull them back out
+        Psi.append(psiTemp)
+        xField.append(xFieldTemp)
+        yField.append(yFieldTemp)
+        uinfField.append(uinfFieldTemp)
+        pressCoeff.append(pTemp)
+        tangentVel.append(tTemp)
+        dragCoeff.append(dragCoeffTemp)
+
+    
+    x = [[np.linspace(0, 1, 17)],[np.linspace(0, 1, 33)],[np.linspace(0, 1, 65)], [np.linspace(0, 1, 513)]]
+    figure = plt.figure()
+    plt.plot(np.transpose(x[0]), tangentVel[0])
+    plt.plot(np.transpose(x[1]), tangentVel[1])
+    plt.plot(np.transpose(x[2]), tangentVel[2])
+    plt.plot(np.transpose(x[3]), tangentVel[3])
+    plt.xlabel('x', fontsize=16)
+    plt.ylabel(r'$u_w$', fontsize=16)
+    plt.title(r'Tangential Wall Velocity ($u_w$)', fontsize=16)
+    plt.savefig('Number3.png')
 
 def streamSolver(ref_index=0):
     """Sets up and solves the stream function system Ax = b
@@ -162,12 +193,13 @@ def velocityFieldGenerator(Psi, ref_index=0):
     dxi = 1 / N / 4
 
     # Our 3 velocity fields
-    xVelField = np.zeros((Neta, Nxi))
-    yVelField = np.zeros((Neta, Nxi))
-    uinfVelField = np.zeros((Neta, Nxi))
+    xVelField = np.zeros((Nxi, Neta))
+    yVelField = np.zeros((Nxi, Neta))
+    uinfVelField = np.zeros((Nxi, Neta))
 
     Psi = np.reshape(Psi, (Nxi, Neta), order='F')
 
+    # x-Velocity Field (only one we actually care about)
     for iY in range(Neta):
         for iX in range(Nxi):
             # Grab the coordinate spaces
@@ -186,81 +218,97 @@ def velocityFieldGenerator(Psi, ref_index=0):
 
             Etaprimey = 1 / h
 
-            # Corner BC's
-            # Bottom left
-            if iY == 0 and iX == 0:
-                xVelField[iY][iX] = secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimey
-                yVelField[iY][iX] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) + \
-                    secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex)
-                continue
-            
-            # Bottom right
-            elif iY == 0 and iX == Nxi-1:
-                xVelField[iY][iX] = secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimey
-                yVelField[iY][iX] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
-                    secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex)
+            # Corner BC's first
+
+            # Bottom floor
+            if iY == 0:
+                xVelField[iX][iY] = secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimey
                 continue
 
-            # Top left
-            elif iY == Neta-1 and iX == 0:
-                xVelField[iY][iX] = secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimey
-                yVelField[iY][iX] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) + \
-                    secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex)
+            # Top top floor
+            elif iY == Neta-1:
+                xVelField[iX][iY] = secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimey
                 continue
             
-            # Top right
-            elif iY == Neta-1 and iX == Nxi-1:
-                xVelField[iY][iX] = secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimey
-                yVelField[iY][iX] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) + \
-                    secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex)           
-                continue
+            # Anything else is an interior node
+            xVelField[iX][iY] = centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimey
 
-            # Top/bottom wall BC
-            if iY == 0 or iY == Neta-1:
-                # Corners already done
-                if iX == 0  or iX == Nxi-1:
+    # y-Velocity Field (I guess)
+    for iY in range(Neta):
+        for iX in range(Nxi):
+            # Grab the coordinate spaces
+            Eta = iY * deta
+            Xi = iX * dxi
+
+            # Global coordinates
+            X = Xi
+            h = 0.2 + 0.1 * (1 - mp.cos(mp.pi * X))
+            Y = h * Eta
+            
+            # All of the various derivatives
+            hprime = mp.pi / 10 * mp.sin(mp.pi * X)
+
+            Etaprimex = -Y * hprime / (h ** 2)
+
+            Etaprimey = 1 / h
+
+            # Wall BC's first
+            
+            # Left Wall
+            if iX == 0:
+                if iY == 0:
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
+                        secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
                     continue
                 elif iY == Neta-1:
-                    xVelField[iY][iX] = secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimey
-                    yVelField[iY][iX] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
-                        secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex) 
-                    continue
-                elif iY == 0:
-                    xVelField[iY][iX] = secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimey
-                    yVelField[iY][iX] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
-                        secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex)  
-                    continue
-
-            # Left/right wall BC
-            if iX == 0 or iX == Nxi-1:
-                # Corners already done
-                if iY == 0  or iY == Neta-1:
-                    continue
-                elif iX == Nxi-1:
-                    xVelField[iY][iX] = centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimey
-                    yVelField[iY][iX] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi)+\
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
+                        secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )                    
+                    continue 
+                else:
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
                         centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
                     continue
 
-                elif iX == 0:
-                    xVelField[iY][iX] = centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimey
-                    yVelField[iY][iX] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi)+\
+            # Right Wall
+            elif iX == Nxi-1:
+                if iY == 0:
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
+                        secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
+                    continue
+                elif iY == Neta-1:
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
+                        secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )                    
+                    continue  
+                else:
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
                         centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
                     continue
 
-            # Anything else is interior node
-            xVelField[iY][iX] = centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimey
-            yVelField[iY][iX] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+            # Top Wall
+            elif iY == Neta-1:
+                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+                    secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )
+                continue
+
+            # Bottom Wall
+            elif iY == 0:
+                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+                    secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
+                continue
+
+            # Everything else must be interior node
+            yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
                 centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
+
 
     # Then loop again to make the magnitude velocity field.
     for iY in range(Neta):
         for iX in range(Nxi):
-            uinfVelField[iY][iX] = mp.sqrt(xVelField[iY][iX] ** 2 + yVelField[iY][iX] ** 2)
+            uinfVelField[iX][iY] = mp.sqrt(xVelField[iX][iY] ** 2 + yVelField[iX][iY] ** 2)
 
     return xVelField, yVelField, uinfVelField
 
-def contourPlotter(Psi, xField, yField, infField, ref_index=0):
+def figureGenerator(Psi, xField, yField, uinfField, ref_index=0):
     """Draws a picutres of the grid (Tron fans rejoice!) & associated contours.
 
     Extended Summary
@@ -315,7 +363,7 @@ def contourPlotter(Psi, xField, yField, infField, ref_index=0):
     Psi = np.reshape(Psi, (Nxi, Neta), order='F')
     xField = np.reshape(xField, (Nxi, Neta), order='F')
     yField = np.reshape(yField, (Nxi, Neta), order='F')
-    infField = np.reshape(infField, (Nxi, Neta), order='F')
+    infField = np.reshape(uinfField, (Nxi, Neta), order='F')
 
     figure.clear()
     plt.contourf(X, Y, np.transpose(Psi), 20)
@@ -356,6 +404,97 @@ def contourPlotter(Psi, xField, yField, infField, ref_index=0):
     # plt.plot(X,Y,'-',color='red')
     # plt.plot(X.transpose(),Y.transpose(),'-',color='red')
     plt.savefig('Uinf.png')
+
+def pressureCoeff(xField, yField, ref_index=0):
+    """Generates the pressure coefficient for tangential along the top wall of the diffuser.
+
+    Parameters
+    ----------
+    xField : np.array type float
+        The x-velocities at each point in the domain
+
+    ref_index : int, optional
+        Refinement index, increases the size of grid by powers of 2, by default 0
+    Returns
+    -------
+    c_p : np.array type float
+        Array of pressure coefficients along the top wall
+    
+    uTangent : np.array type float
+        Tangential velocity along the top wall
+    """
+    N = 2**(2+ref_index)
+    Nxi = (4*N + 1) # Number of grid points in xi-direction
+    Neta = (N + 1) # Number of grid points in eta-direction
+
+    deta = 1 / N
+    dxi = 1 / N / 4
+
+    c_p = np.zeros((Nxi, 1))
+    uTangent = np.zeros((Nxi, 1))
+
+    for iX in range(Nxi):
+        # Reference space -> Global space
+        Xi = iX * dxi
+        X = Xi
+
+        # Slope at each point forming a [1, h'] tangent vector
+        hprime = mp.pi / 10 * mp.sin(mp.pi * X)
+        # Normalize the tanget vector into being a unit tangent
+        magnitude = mp.sqrt(1 + hprime ** 2)
+        tangentVec = np.array([1 / magnitude, hprime/magnitude])
+
+        # Velocity vector [u, v]
+        velocityVec = np.array([xField[iX][Neta-1], yField[iX][Neta-1]])
+
+        # Tangent via dot producting
+        uTangent[iX] = np.dot(tangentVec, velocityVec)
+
+        c_p[iX] = 1 - (uTangent[iX] / xField[1][1]) ** 2
+    return [c_p, uTangent]
+
+def wallDragCoeff(pressure, ref_index=0):
+    """Integrates over the pressure coefficient to find the drag along diffuser wall.
+
+    Parameters
+    ----------
+    pressure : np.array type float
+        Pressure coefficients (c_p) along the top wall of the diffuser
+    ref_index : int, optional
+        Refinement index, by default 0
+
+    Returns
+    -------
+    C_D : float
+        Total drag coefficient for the diffuser
+    """
+    N = 2**(2+ref_index)
+    Nxi = (4*N + 1) # Number of grid points in xi-direction
+    Neta = (N + 1) # Number of grid points in eta-direction
+
+    deta = 1 / N
+    dxi = 1 / N / 4
+
+    CD = 0
+
+    # Trapezoidal Integration
+    for iX in range(Nxi-1):
+        # Grab the coordinate spaces
+        Xi = iX * dxi
+
+        # Global coordinates
+        X = Xi
+        h = 0.2 + 0.1 * (1 - mp.cos(mp.pi * X))
+        Y = h
+        
+        # All of the various derivatives
+        hprime = mp.pi / 10 * mp.sin(mp.pi * X)
+
+        Etaprimex = -Y * hprime / (h ** 2)
+
+        CD =+ (pressure[iX] + pressure[iX+1]) / 2 * dxi * Etaprimex
+
+    return CD
 
 def centralDiff(uplus, uminus, delta):
     """Returns the central difference at a point
@@ -414,6 +553,7 @@ def secOrderRight(ought, uplus1, uplus2, delta):
         du/d(delta) at that point
     """
     return (-3*ought + 4*uplus1 - uplus2) / (2*delta)
+
 
 if __name__ == "__main__":
     main()
