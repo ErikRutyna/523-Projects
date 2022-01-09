@@ -4,6 +4,7 @@ from scipy.sparse import linalg
 import math as mp
 import matplotlib.pyplot as plt
 
+
 def main():
     N = [0, 1, 2, 5]
     Psi = []
@@ -17,8 +18,7 @@ def main():
     for i in range(len(N)): 
         psiTemp = streamSolver(N[i])
         xFieldTemp, yFieldTemp, uinfFieldTemp = velocityFieldGenerator(psiTemp, N[i])
-        pTemp, tTemp = pressureCoeff(xFieldTemp, yFieldTemp, N[i])
-        dragCoeffTemp = wallDragCoeff(pTemp, N[i])
+        pTemp, tTemp, CDtemp = pressureCoeff(xFieldTemp, yFieldTemp, N[i])
 
         # Pull them back out
         Psi.append(psiTemp)
@@ -27,19 +27,64 @@ def main():
         uinfField.append(uinfFieldTemp)
         pressCoeff.append(pTemp)
         tangentVel.append(tTemp)
-        dragCoeff.append(dragCoeffTemp)
+        dragCoeff.append(CDtemp)
 
-    
-    x = [[np.linspace(0, 1, 17)],[np.linspace(0, 1, 33)],[np.linspace(0, 1, 65)], [np.linspace(0, 1, 513)]]
-    figure = plt.figure()
+    # Map all the contour plots
+    contourGenerator(Psi[1], xField[1], yField[1], uinfField[1], N[1])
+
+    # Tangential Mapping
+    x = [[np.linspace(0, 1, 17)], [np.linspace(0, 1, 33)], [np.linspace(0, 1, 65)], [np.linspace(0, 1, 513)]]
+    figure = plt.figure(figsize=(8, 6))
     plt.plot(np.transpose(x[0]), tangentVel[0])
     plt.plot(np.transpose(x[1]), tangentVel[1])
     plt.plot(np.transpose(x[2]), tangentVel[2])
-    plt.plot(np.transpose(x[3]), tangentVel[3])
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel(r'$u_w$', fontsize=16)
-    plt.title(r'Tangential Wall Velocity ($u_w$)', fontsize=16)
-    plt.savefig('Number3.png')
+    # plt.plot(np.transpose(x[3]), tangentVel[3])
+    plt.legend(['r=0', 'r=1', 'r=2'])
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel(r'Outer Wall Tangential Velocity - $u_w$', fontsize=13)
+    # plt.title(r'Tangential Wall Velocity ($u_w$)', fontsize=13)
+    plt.savefig('TangentialVelocity.png')
+
+    # Velocity Profile
+    h25 = 0.2 + 0.1*(1-mp.cos(mp.pi*0.25))
+    h75 = 0.2 + 0.1*(1-mp.cos(mp.pi*0.75))
+
+    # Build vectors for quiver plot
+    xVec25 = np.zeros(17)
+    uVec25 = np.linspace(0, h25, 17)
+    yVec25 = xField[2][16]
+    vVec25 = np.zeros(17)
+
+    figure.clear()
+    plt.plot(xField[2][16], np.linspace(0, h25, 17))
+    # plt.quiver(xVec25, yVec25, uVec25, vVec25, width=0.005, headwidth=2, angles='xy', scale_units='xy', scale=1, color='r')
+    plt.ylabel('Height', fontsize=13)
+    plt.xlabel('x-Velocity', fontsize=13)
+    plt.savefig('u_y_x=0.25.png')
+
+    xVec75 = np.linspace(0, h75, 17)
+    uVec75 = np.ones(17) * h75
+    yVec75 = xField[2][48]
+    vVec75 = np.zeros(17)
+    figure.clear()
+    plt.plot(xField[2][48], np.linspace(0, h75, 17))
+    # plt.quiver(xVec75, yVec75, uVec75, vVec75, width=0.005, headwidth=2, angles='xy', scale_units='xy', scale=1, color='r')
+    plt.ylabel('Height', fontsize=13)
+    plt.xlabel('x-Velocity', fontsize=13)
+    plt.savefig('u_y_x=0.75.png')
+
+    # Convergence Study
+    figure.clear()
+    x = (([mp.sqrt(1/16*1/4), mp.sqrt(1/32*1/8), mp.sqrt(1/64*1/16)]))
+    y = ((abs(dragCoeff[0:3] - dragCoeff[3])))
+    plt.loglog(x, (y))
+    plt.xlabel(r'h = $\sqrt{\Delta x \Delta y}$', fontsize=13)
+    plt.ylabel(r'$|c_d - c_{d_{exact}}|$', fontsize=13)
+    plt.autoscale()
+    # plt.title(r'Error in Drag Coefficient', fontsize=13)
+    plt.savefig('ConvergenceStudy.png', bbox_inches="tight")
+    print(np.polyfit(np.log2(x), np.log2(y), 1))
+
 
 def streamSolver(ref_index=0):
     """Sets up and solves the stream function system Ax = b
@@ -55,10 +100,10 @@ def streamSolver(ref_index=0):
         2-D array that forms the stream function matrix at each point in the reference domain
     """
     N = 2**(2+ref_index)
-    Nxi = (4*N + 1) # Number of grid points in xi-direction
-    Neta = (N + 1) # Number of grid points in eta-direction
-    Ntot = Nxi * Neta # Number of grid points total
-    NNZ = 2*Nxi + 2*(Neta-2) + (Nxi - 1)*(Neta - 1)*9 # Number of non-zero grid points
+    Nxi = (4*N + 1)  # Number of grid points in xi-direction
+    Neta = (N + 1)  # Number of grid points in eta-direction
+    Ntot = Nxi * Neta  # Number of grid points total
+    NNZ = 2*Nxi + 2*(Neta-2) + (Nxi - 1)*(Neta - 1)*9  # Number of non-zero grid points
 
     deta = 1 / N
     dxi = 1 / N / 4
@@ -71,12 +116,12 @@ def streamSolver(ref_index=0):
     # Psi-value vector
     F = np.zeros(Ntot)
 
-    iNZ = 0 # First index for non-zero value
+    iNZ = 0  # First index for non-zero value
 
     for iGlob in range(Ntot):
         # Grab the coordinate spaces
-        Eta = mp.floor(iGlob/Nxi) / Neta
-        Xi = (iGlob % Nxi + 1) / Nxi
+        Eta = mp.floor(iGlob/Nxi) / (Neta-1)
+        Xi = (iGlob % Nxi) / (Nxi-1)
 
         # Global coordinates
         X = Xi
@@ -110,14 +155,14 @@ def streamSolver(ref_index=0):
             iNZ += 1
             continue
         # Left wall, psi = varies linearly
-        elif  iGlob % Nxi == 0:
+        elif iGlob % Nxi == 0:
             F[iGlob] = mp.floor(iGlob / Nxi) / N
             rows[iNZ] = cols[iNZ] = iGlob
             data[iNZ] = 1
             iNZ += 1
             continue
         # Right wall, psi = varies linearly
-        elif  iGlob % Nxi == (Nxi - 1):
+        elif iGlob % Nxi == (Nxi - 1):
             F[iGlob] = mp.floor(iGlob / Nxi) / N
             rows[iNZ] = cols[iNZ] = iGlob
             data[iNZ] = 1
@@ -161,6 +206,7 @@ def streamSolver(ref_index=0):
 
     Psi = sp.linalg.spsolve(A, F)
     return Psi
+
 
 def velocityFieldGenerator(Psi, ref_index=0):
     """Generates the x-velocity field and y-velocity field for a given
@@ -257,47 +303,47 @@ def velocityFieldGenerator(Psi, ref_index=0):
             # Left Wall
             if iX == 0:
                 if iY == 0:
-                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +
                         secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
                     continue
                 elif iY == Neta-1:
-                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +
                         secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )                    
                     continue 
                 else:
-                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderRight(Psi[iX][iY], Psi[iX+1][iY], Psi[iX+2][iY], dxi) +
                         centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
                     continue
 
             # Right Wall
             elif iX == Nxi-1:
                 if iY == 0:
-                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +
                         secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
                     continue
                 elif iY == Neta-1:
-                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +
                         secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )                    
                     continue  
                 else:
-                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +\
+                    yVelField[iX][iY] = -(secOrderLeft(Psi[iX][iY], Psi[iX-1][iY], Psi[iX-2][iY], dxi) +
                         centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
                     continue
 
             # Top Wall
             elif iY == Neta-1:
-                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +
                     secOrderLeft(Psi[iX][iY], Psi[iX][iY-1], Psi[iX][iY-2], deta) * Etaprimex )
                 continue
 
             # Bottom Wall
             elif iY == 0:
-                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+                yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +
                     secOrderRight(Psi[iX][iY], Psi[iX][iY+1], Psi[iX][iY+2], deta) * Etaprimex )
                 continue
 
             # Everything else must be interior node
-            yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +\
+            yVelField[iX][iY] = -(centralDiff(Psi[iX+1][iY], Psi[iX-1][iY], dxi) +
                 centralDiff(Psi[iX][iY+1], Psi[iX][iY-1], deta) * Etaprimex)
 
 
@@ -308,8 +354,9 @@ def velocityFieldGenerator(Psi, ref_index=0):
 
     return xVelField, yVelField, uinfVelField
 
-def figureGenerator(Psi, xField, yField, uinfField, ref_index=0):
-    """Draws a picutres of the grid (Tron fans rejoice!) & associated contours.
+
+def contourGenerator(Psi, xField, yField, uinfField, ref_index=0):
+    """Plots the associated Contours for whichever set is given.
 
     Extended Summary
     ----------------
@@ -343,20 +390,20 @@ def figureGenerator(Psi, xField, yField, uinfField, ref_index=0):
 
 
     # Plot all the coordinate pairs
-    figure = plt.figure()
+    figure = plt.figure(figsize=(8, 6))
     plt.scatter(X, Y)
     plt.gca().set_aspect('equal')
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.title('Global Space Visualization', fontsize=16)
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel('y', fontsize=13)
+    plt.title('Global Space Visualization', fontsize=13)
     plt.savefig('Global.png')
 
     figure.clear()
     plt.scatter(Xi, Eta)
     plt.gca().set_aspect('equal')
-    plt.xlabel(r'$\xi$', fontsize=16)
-    plt.ylabel(r'$\eta$', fontsize=16)
-    plt.title('Reference Space Visualization', fontsize=16)
+    plt.xlabel(r'$\xi$', fontsize=13)
+    plt.ylabel(r'$\eta$', fontsize=13)
+    plt.title('Reference Space Visualization', fontsize=13)
     plt.savefig('Ref.png')
 
     # Contour Mapping
@@ -366,44 +413,45 @@ def figureGenerator(Psi, xField, yField, uinfField, ref_index=0):
     infField = np.reshape(uinfField, (Nxi, Neta), order='F')
 
     figure.clear()
-    plt.contourf(X, Y, np.transpose(Psi), 20)
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.title('$\Psi$ Contour Mapping', fontsize=16)
+    plt.contourf(X, Y, np.transpose(Psi), 9)
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel('y', fontsize=13)
+    # plt.title('$\Psi$ Contour Mapping', fontsize=13)
     plt.colorbar()
     # plt.plot(X,Y,'-',color='red')
     # plt.plot(X.transpose(),Y.transpose(),'-',color='red')
-    plt.savefig('Contour.png')
+    plt.savefig('StreamFunctionContour.png')
 
     figure.clear()
-    plt.contourf(X, Y, np.transpose(xField))
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.title('x-Velocity Contour Mapping', fontsize=16)
+    plt.contourf(X, Y, np.transpose(xField), 20)
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel('y', fontsize=13)
+    # plt.title('x-Velocity Contour Mapping', fontsize=13)
     plt.colorbar()
     # plt.plot(X,Y,'-',color='red')
     # plt.plot(X.transpose(),Y.transpose(),'-',color='red')
-    plt.savefig('x-Velocity.png')
+    plt.savefig('x-VelocityContour.png')
 
     figure.clear()
-    plt.contourf(X, Y, np.transpose(yField))
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.title('y-Velocity Contour Mapping', fontsize=16)
+    plt.contourf(X, Y, np.transpose(yField), 20)
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel('y', fontsize=13)
+    # plt.title('y-Velocity Contour Mapping', fontsize=13)
     plt.colorbar()
     # plt.plot(X,Y,'-',color='red')
     # plt.plot(X.transpose(),Y.transpose(),'-',color='red')
-    plt.savefig('y-Velocity.png')
+    plt.savefig('y-VelocityContour.png')
 
     figure.clear()
-    plt.contourf(X, Y, np.transpose(infField))
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.title('$U_{\infty}$ Contour Mapping', fontsize=16)
+    plt.contourf(X, Y, np.transpose(infField), 20)
+    plt.xlabel('x', fontsize=13)
+    plt.ylabel('y', fontsize=13)
+    # plt.title('$U_{\infty}$ Contour Mapping', fontsize=13)
     plt.colorbar()
     # plt.plot(X,Y,'-',color='red')
     # plt.plot(X.transpose(),Y.transpose(),'-',color='red')
-    plt.savefig('Uinf.png')
+    plt.savefig('UinfContour.png')
+
 
 def pressureCoeff(xField, yField, ref_index=0):
     """Generates the pressure coefficient for tangential along the top wall of the diffuser.
@@ -422,6 +470,9 @@ def pressureCoeff(xField, yField, ref_index=0):
     
     uTangent : np.array type float
         Tangential velocity along the top wall
+
+    CD : float
+        Drag coefficient on the diffuser wall
     """
     N = 2**(2+ref_index)
     Nxi = (4*N + 1) # Number of grid points in xi-direction
@@ -430,16 +481,20 @@ def pressureCoeff(xField, yField, ref_index=0):
     deta = 1 / N
     dxi = 1 / N / 4
 
-    c_p = np.zeros((Nxi, 1))
-    uTangent = np.zeros((Nxi, 1))
+    c_p = np.zeros((Nxi))
+    uTangent = np.zeros((Nxi))
+    norm = np.zeros((Nxi))
+    X = np.zeros((Nxi))
+    CD = 0
 
     for iX in range(Nxi):
         # Reference space -> Global space
         Xi = iX * dxi
-        X = Xi
+        X[iX] = Xi
 
         # Slope at each point forming a [1, h'] tangent vector
-        hprime = mp.pi / 10 * mp.sin(mp.pi * X)
+        hprime = mp.pi / 10 * mp.sin(mp.pi * X[iX])
+
         # Normalize the tanget vector into being a unit tangent
         magnitude = mp.sqrt(1 + hprime ** 2)
         tangentVec = np.array([1 / magnitude, hprime/magnitude])
@@ -450,8 +505,29 @@ def pressureCoeff(xField, yField, ref_index=0):
         # Tangent via dot producting
         uTangent[iX] = np.dot(tangentVec, velocityVec)
 
-        c_p[iX] = 1 - (uTangent[iX] / xField[1][1]) ** 2
-    return [c_p, uTangent]
+        # Formula for pressure coefficient
+        c_p[iX] = 1 - (uTangent[iX] / xField[0][0]) ** 2
+
+        # Values at various x-points for computing C_d
+        h = 0.2 + 0.1*(1-np.cos(np.pi*X[iX]))
+        y = h
+
+        # Nabla * Eta
+        delEtax = -y * hprime / h ** 2
+
+        # Normalizing the x-component of the Nable * Eta vector
+        norm[iX] = delEtax / mp.sqrt(delEtax ** 2 + (1/h) ** 2)
+
+    # Integrand for trapz/by hand integration
+    integrand = c_p * norm
+
+    # This doesn't match anything, c_d ~ 0.09 for any N
+    # for iX in range(Nxi-1):
+    #     CD += (integrand[iX] + integrand[iX+1]) / 2 * dxi
+    CD = np.trapz(integrand, x=X)
+
+    return c_p, uTangent, CD
+
 
 def wallDragCoeff(pressure, ref_index=0):
     """Integrates over the pressure coefficient to find the drag along diffuser wall.
@@ -491,10 +567,14 @@ def wallDragCoeff(pressure, ref_index=0):
         hprime = mp.pi / 10 * mp.sin(mp.pi * X)
 
         Etaprimex = -Y * hprime / (h ** 2)
+        Etaprimey = 1 / h
+        magnitude = (Etaprimex ** 2 + Etaprimey) ** 0.5
+        Nx = Etaprimex / magnitude
 
-        CD =+ (pressure[iX] + pressure[iX+1]) / 2 * dxi * Etaprimex
+        CD += (pressure[iX] + pressure[iX+1]) / 2 * dxi * Nx
 
     return CD
+
 
 def centralDiff(uplus, uminus, delta):
     """Returns the central difference at a point
@@ -513,6 +593,7 @@ def centralDiff(uplus, uminus, delta):
         du/d(delta) at that point
     """
     return (uplus - uminus) / (2*delta)
+
 
 def secOrderLeft(ought, uminus1, uminus2, delta):
     """Returns the first derivative using a left-sided schema
@@ -533,6 +614,7 @@ def secOrderLeft(ought, uminus1, uminus2, delta):
         du/d(delta) at that point
     """
     return (3*ought - 4*uminus1 + uminus2) / (2*delta)
+
 
 def secOrderRight(ought, uplus1, uplus2, delta):
     """Returns the first derivative using a right-sided schema

@@ -1,0 +1,1 @@
+Project 2 - some of this code was provided by Professor Fidkowski (flux.py and readgri.py) but everything else was written by myself.
