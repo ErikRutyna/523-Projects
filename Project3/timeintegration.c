@@ -81,15 +81,14 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
         U = UProjection(U, F, HX, dt, N);
         V = VProjection(V, G, HY, dt, N);
 
-
-        RHS = RHSCalc(U, V, dt, N);
+        // Find RHS of PPE
+        RHS = RHSCalc(U, V, dt, N);        
+        P = Smoother(P, RHS, N, 50);
 
         // ================================
         // Failed Multigrid experimentation
         // ================================
         /*
-        // Find RHS of PPE
-        RHS = RHSCalc(U, V, dt, N);
 
         // Calculate the AU matrix
         AU = AUCalc(P, N);
@@ -126,10 +125,6 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
         // END OF MULTIGRID EXPERIMENTATION
         // ================================
         */
-
-        // Smooth until no divergence
-        P = PPESolve2(P, U, V, dt, N);
-        //P = Smoother(P, RHS, N, 20);
 
         // Correct the velocity fields to n+1
         U = UCorrection(U, P, dt, N);
