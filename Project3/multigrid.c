@@ -189,7 +189,7 @@ double* RHSCalc(double* U, double* V, double dt, int N){
     return divV;
 }
 
-double* DivError(double* P, double* divV, double N){
+double* PPEResidual(double* P, double* divV, int N){
     // Calculates residual error "r" in r = div(V) - Laplace(P)
 
     double* r = Zeros(N+2, N+2);
@@ -198,9 +198,9 @@ double* DivError(double* P, double* divV, double N){
 
     for(int i = 1; i < (N+1); i++) {
         for(int j = 1; j < (N+1); j++) {
-            Gi = (int) i * (N+2) + j;
+            Gi = i * (N+2) + j;
 
-            r[Gi] = divV[Gi] - P[Gi];
+            r[Gi] = divV[Gi] - ((P[Gi + 1] + P[Gi - 1] + P[Gi + (N+2)] + P[Gi - (N+2)] - 4 * P[Gi]) / (h * h));
         }
     }
     return r;

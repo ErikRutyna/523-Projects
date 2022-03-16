@@ -68,14 +68,18 @@ double* RHSCalc(double* U, double* V, double dt, int N); // div(V)/dt for the fi
 double* Smoother(double* P, double* divV, double N, int Z);
 
 // Residual vector calc
-double* DivError(double* P, double* divV, double N);
+double* PPEResidual(double* P, double* divV, int N);
 
 // The mock-laplacian thing
 double* AUCalc(double* A, int N); 
 
+
 /*========================
 ===== Misc Debugging =====
 ========================*/
+
+// Add two matrices
+double* AddMatrix(double* K, double* L, int N);
 
 // Calculates the residual at the timestep
 double ResidualCalc(double* P, double* F, double* G, double* HX, double* HY, double N);

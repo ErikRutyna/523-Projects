@@ -13,7 +13,7 @@ Project3: $(OBJS)
 	$(CC) $(LFLAGS) -c -o $@ $< 
 
 clean:
-	rm -f $(OBJS) $(OUT) uVelocity.csv vVelocity.csv residuals.csv
+	rm -f $(OBJS) $(OUT) uVelocity.csv vVelocity.csv residuals.csv pressure.csv pressure2.csv
 
 run: $(OUT)
 	./$(OUT)

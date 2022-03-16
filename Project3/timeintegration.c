@@ -5,14 +5,13 @@
 void CavityFlow(double N, double Re, int uW, double tol, double beta){
 
     // Initialize various flow parameters
-    int i = 0;                  // Iteration number
-    double t = 0;               // Time elapsed in simulation
-    double h = 1 / N;           // Cell length in both x & y directions
-    double dt;                  // Timestep - constant for each iteration
-    FILE *vFile, *uFile, *rFile;// Pointers to output files
-    double PPEE = 1; 
-    double PPEtol = pow(10, -4);
+    int i = 0;                          // Iteration number
+    double t = 0;                       // Time elapsed in simulation
+    double h = 1 / N;                   // Cell length in both x & y directions
+    double dt;                          // Timestep - constant for each iteration
+    FILE *vFile, *uFile, *rFile, *pfile;// Pointers to output files
     int Gi;
+    FILE *pfile2;
 
     // Check which timestep to use
     double dt1 = pow(h, 2) / (4 * 1 / Re);
@@ -31,8 +30,9 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
     double* U = Zeros(N+2, N+3);
     double* V = Zeros(N+3, N+2);
     double* P = Zeros(N+2, N+2);
+    //double* P2 = Zeros(N+2, N+2);
     double* RHS;
-    double* BigR;
+    double* error;
     double* AU;
     double* E;
     printf("Initialization of state-fields passed!\n");
@@ -48,19 +48,21 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
     uFile = fopen("uVelocity.csv", "w");
     vFile = fopen("vVelocity.csv", "w");
     rFile = fopen("residuals.csv", "w");
+    pfile = fopen("pressure.csv", "w");
+    pfile2 = fopen("pressure2.csv", "w");
     printf("Initialization of output files passed!\n");
 
     // Residual term
-    double error = 1;
+    double residual = 1;
 
     printf("\nGrid Size w/ ghost: %i x %i\n\n", (int) N+2, (int) N+2);
-    while (error > tol){
+    while (residual > tol){
         // Print a nice statement to terminal to track simulation progress
         if (i % 25 == 0){
-            printf("Iteration: %i at time t = %f s - Residual: %f\n", i, t, error);
+            printf("Iteration: %i at time t = %f s - Residual: %f\n", i, t, residual);
         }
         // Exit early if an instability causes residuals to increase
-        if (error > 100){
+        if (residual > 100){
             printf("Instability detected! The solution is no longer converging to steady state.\n");
             printf("Exiting simulation on iteration %i and time t = %f s.\n", i, t);
             break;
@@ -81,57 +83,65 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
         U = UProjection(U, F, HX, dt, N);
         V = VProjection(V, G, HY, dt, N);
 
+        // Start w/ 2x Multigrid, then make it recursive
+        // =========================
+        // Multigrid experimentation
+        // =========================
+
+        //printf("\nPressure Matrix \n");
+        //PrintMatrix(P, N+2, N+2);
+        //printf("\nPressure (Multigrid) Matrix \n");
+        //PrintMatrix(P2, N+2, N+2);
+
         // Find RHS of PPE
-        RHS = RHSCalc(U, V, dt, N);        
-        P = Smoother(P, RHS, N, 50);
+        RHS = RHSCalc(U, V, dt, N);
 
-        // ================================
-        // Failed Multigrid experimentation
-        // ================================
-        /*
+        // Pre-smooth a few iterations
+        P = Smoother(P, RHS, N, 10);
 
-        // Calculate the AU matrix
-        AU = AUCalc(P, N);
+        //printf("\nPressure Matrix \n");
+        //PrintMatrix(P, N+2, N+2);
+        //printf("\nPressure (Multigrid) Matrix \n");
+        //PrintMatrix(P2, N+2, N+2);
 
-        // Calculate error at each cell
-        BigR = DivError(P, RHS, N);
-
-
-        E = Zeros((N)+2, (N)+2);
-        // Find the divergence-free pressure field using projected velocity
-        //while(PPEE > PPEtol) {
-        //E = PPESolve3(E, Restriction(BigR, N, N), Restriction(AU, N, N), N/2);
-        E = Smoother(E, BigR, N, 1000);
-
-        // Prolongate the error
-        //E = DirectProlongation(E, N/2, N/2);
         
-        // Add the error back into the pressure
-        for(int i = 1; i < (N+1); i++) {
-            for(int j = 1; j < (N+1); j++) {
-                Gi = (int) i * (N+2) + j;
+        // Compute the initial residual for Au=b, where r = b - Au
+        error = PPEResidual(P, RHS, N);
 
-                P[Gi] += E[Gi];
-            }
-        }            
+        // Restrict the error to be on the corase grid
+        error = Restriction(error, N, N);
         
-        // Some final smoothing
-        //P = Smoother(P, RHS, N, 5);
+        // Make the "e" matrix
+        E = Zeros((N/2)+2, (N/2)+2);
 
-        // Check if we have "solved" the PPE to our tolerance
-        //PPEE = GSError(P, U, V, dt, N);
-        //}
-        // ================================
-        // END OF MULTIGRID EXPERIMENTATION
-        // ================================
-        */
+        
+        // Smooth on the restricted domain
+        E = Smoother(E, error, N/2, 10);
+        
+        // Prolongate E
+        E = DirectProlongation(E, N/2, N/2);
+
+        // Add the error E back into P
+        P = AddMatrix(P, E, N);
+        
+        // Post Smoothing Operation
+        P = Smoother(P, RHS, N, 5);
+
+        //printf("\nPressure Matrix \n");
+        //PrintMatrix(P, N+2, N+2);
+        //printf("\nPressure (Multigrid) Matrix \n");
+        //PrintMatrix(P2, N+2, N+2);
+
+        // ================
+        // END OF MULTIGRID 
+        // ================
 
         // Correct the velocity fields to n+1
         U = UCorrection(U, P, dt, N);
         V = VCorrection(V, P, dt, N);
 
         // Calculate the residual
-        error = ResidualCalc(P, F, G, HX, HY, N);
+        residual = ResidualCalc(P, F, G, HX, HY, N);
         
         /*
         printf("\nU Matrix \n");
@@ -140,7 +150,7 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
         PrintMatrix(V, N+3, N+2);
         printf("\nPressure Matrix \n");
         PrintMatrix(P, N+2, N+2);
-        printf("\nPressure2 Matrix \n");
+        printf("\nPressure (Multigrid) Matrix \n");
         PrintMatrix(P2, N+2, N+2);
         printf("\nF Flux Matrix\n");
         PrintMatrix(F, N+2, N+2);
@@ -149,17 +159,20 @@ void CavityFlow(double N, double Re, int uW, double tol, double beta){
         printf("\nHX Flux Matrix\n");
         PrintMatrix(HX, N+3, N+3);
         printf("\nHY Flux Matrix\n");
-        PrintMatrix(HY, N+3, N+3);*/
+        PrintMatrix(HY, N+3, N+3);
+        */
 
         // Update residual, simulation time, iteration number and save residual
-        //error = 0;
+        //residual = 0;
         i++;
         t += dt;
-        fprintf(rFile, "%lf", error);
+        fprintf(rFile, "%lf", residual);
         fprintf(rFile, "\n");
     }
     // Save the velocity fields to outputs files
     SaveMatrix(U, (int) N+2, (int) N+3, uFile);
     SaveMatrix(V, (int) N+3, (int) N+2, vFile);
+    SaveMatrix(P, (int) N, (int) N, pfile);
+    //SaveMatrix(P2, (int) N, (int) N, pfile);
 
 }
