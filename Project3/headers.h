@@ -53,7 +53,7 @@ double* VCorrection(double* V, double* P, double dt, double N);
 ===================*/
 
 // Main multigrid driver
-double* PPESolve3(double* E, double* R, double* AU, double N);
+double* MG_Recursive(double* E, double* R, double N);
 
 // Restriction
 double* Restriction(double* A, int N, int M); // Restricts down from NxM to (N/2)x(M/2)
@@ -68,7 +68,7 @@ double* RHSCalc(double* U, double* V, double dt, int N); // div(V)/dt for the fi
 double* Smoother(double* P, double* divV, double N, int Z);
 
 // Residual vector calc
-double* PPEResidual(double* P, double* divV, int N);
+double* PPEResidual(double* e, double* P, double* divV, int N);
 
 // The mock-laplacian thing
 double* AUCalc(double* A, int N); 
