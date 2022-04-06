@@ -245,3 +245,16 @@ double GSError(double* P, double* U, double* V, double dt, double N){
     }
     return errorNorm;
 }
+
+// Add two matrices
+double* AddMatrix(double* K, double* L, int N) {
+    // Adds matrix L into matrix K assuming they're both square of size N
+
+    for(int i = 0; i < N; i++){
+        for(int j = 0; j < N; j++) {
+            K[i * N + j] += L[i * N + j];
+        }
+    }
+
+    return K;
+}

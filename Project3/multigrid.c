@@ -1,54 +1,58 @@
 #include "headers.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-double* PPESolve3(double* E, double* R, double* AU, double N){
-    // Recursive Multigrid
-    /*
-    if( (int) N == 16) {
-        E = Smoother(E, R, N, 100);
+double* MG_Recursive(double* E, double* R, double N){
+    // Recursive geometric multigrid - goes down to N=16 for coarsest layer
+
+    // Exit condition - smallest gridsize of 16x16
+    if ((int) N == 16) {
+        // Smooth to completion
+        E = Smoother(E, R, N, 20);
+
         return E;
     }
-    */
-    // Pre-smooth
-    E = Smoother(E, R, N, 20);
+    double* rF;
+    double* rC;
+    double* ZC;
+    double* ZF;
 
-    int Gi = 0;
-    // Restriction
-    for(int i = 1; i < (N+1); i++) {
-        for(int j = 1; j < (N+1); j++) {
-            Gi = (int) i * (N+2) + j;
+    // Pre-smoothing
+    E = Smoother(E, R, N, 10);
 
-            R[Gi] -= AU[Gi]; 
-        }
-    }
-    double* rR = Restriction(R, N, N);
+    // "Coarse-ning" of r
+    rF = PPEResidual(rF, E, R, N);
 
-    // Create new matrices for next level
-    AU = Zeros((N/2)+2, (N/2)+2);
-    double* E2 = Zeros((N/2)+2, (N/2)+2);
+    // Restrict the residual vector to coarse domain
+    rC = Restriction(rF, N, N);
 
-    E2 = Smoother(E2, rR, (N/2), 100);
+    // New E matric for coarse grid
+    ZC = Zeros((N/2)+2, (N/2)+2);
 
-    // Enter recursion
-    //E2 = PPESolve3(E2, R, AU, N/2);
+    // This is our recursive function call
+    ZC = MG_Recursive(ZC, rC, N/2);
+    // Now we're on the way up, have to add and free & prolongate accordingly
 
-    // Prolongate back out the error
-    double* pE2 = DirectProlongation(E2, N/2, N/2);
+    // Prolongate ZC on the way up - function returns new prolongated Z, and also free's old
+    ZF = DirectProlongation(ZC, N/2, N/2);
 
-    // Add it to the current level's error
-    /*Gi = 0;
-    for(int i = 1; i < (N+1); i++) {
-        for(int j = 1; j < (N+1); j++) {
-            Gi = (int) i * (N+2) + j;
+    // Add the Z back into E
+    E = AddMatrix(E, ZF, N);
 
-            E[Gi] += E2[Gi]; 
-        }
-    }*/
+    // Post smooth now that the error is added back
+    E = Smoother(E, R, N, 10);
 
-    // Post-smoothing
-    E = Smoother(pE2, R, N, 20);
+    free(rF);
+    free(rC);
+    free(ZC);
+    free(ZF);
+    rF = NULL;
+    rC = NULL;
+    ZC = NULL;
+    ZF = NULL;
 
+    // Return back E - on the highest level this is our new pressure matrix
     return E;
 }
 
@@ -123,7 +127,6 @@ double* DirectProlongation(double* A, int N, int M){
         iBig += 2;
         jBig = 1;
     }
-
     return Anew;
 }
 
@@ -189,21 +192,21 @@ double* RHSCalc(double* U, double* V, double dt, int N){
     return divV;
 }
 
-double* DivError(double* P, double* divV, double N){
+double* PPEResidual(double* e, double* P, double* divV, int N){
     // Calculates residual error "r" in r = div(V) - Laplace(P)
 
-    double* r = Zeros(N+2, N+2);
     double h = 1.0 / N;
     int Gi;
+    e = Zeros(N+2, N+2);
 
     for(int i = 1; i < (N+1); i++) {
         for(int j = 1; j < (N+1); j++) {
-            Gi = (int) i * (N+2) + j;
+            Gi = i * (N+2) + j;
 
-            r[Gi] = divV[Gi] - P[Gi];
+            e[Gi] = divV[Gi] - ((P[Gi + 1] + P[Gi - 1] + P[Gi + (N+2)] + P[Gi - (N+2)] - 4 * P[Gi]) / (h * h));
         }
     }
-    return r;
+    return e;
 }
 
 double* AUCalc(double* A, int N){

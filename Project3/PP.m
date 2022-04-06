@@ -6,7 +6,7 @@ clc
 N = 32;
 % Re = 100;
 % Re = 400;
-Re = 1000;
+Re = 400;
 h = 1 / N;
 
 % These two functions were written by Jose Luiz Vargas de

@@ -10,7 +10,7 @@ int main(){
 	double Re;
 	int uW = 1;
 	double tol = pow(10, -5);
-	double beta = 0.5;
+	double beta = 0.1;
 
 	// Getting simulation to run and printing inputs to check
 	printf("\nPlease enter the grid size (powers of 2 only): ");

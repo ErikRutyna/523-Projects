@@ -2,7 +2,7 @@ OBJS	= boundary.o debugger.o driver.o helper.o multigrid.o timeintegration.o upd
 SOURCE	= boundary.c debugger.c driver.c helper.c multigrid.c timeintegration.c updater.c
 HEADER	= headers.h
 OUT	= Project3
-LFLAGS	 = -lm -g -O3 -march=native
+LFLAGS	 = -lm -g -O3 -march=native -fsanitize=address
 
 all: Project3
 
@@ -13,7 +13,7 @@ Project3: $(OBJS)
 	$(CC) $(LFLAGS) -c -o $@ $< 
 
 clean:
-	rm -f $(OBJS) $(OUT) uVelocity.csv vVelocity.csv residuals.csv
+	rm -f $(OBJS) $(OUT) uVelocity.csv vVelocity.csv residuals.csv pressure.csv pressure2.csv
 
 run: $(OUT)
 	./$(OUT)
