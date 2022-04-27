@@ -2,7 +2,7 @@ OBJS	= driver.o flux.o helper.o mesh.o mesh_refinement.o pressure.o stdatmos.o t
 SOURCE	= driver.c flux.c helper.c mesh.c mesh_refinement.c pressure.c stdatmos.c timemarching.c
 HEADER	= header.h
 OUT	= CompEuler
-LFLAGS	 = -lpthread -lm
+LFLAGS	 = -lpthread -lm -g -O0 -ggdb
 
 all: CompEuler
 

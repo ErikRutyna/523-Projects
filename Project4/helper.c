@@ -2,21 +2,20 @@
 #include <string.h>
 #include <stdio.h>
 
-char* getString(char* prompt){
+char* getString(char* external, char* prompt){
     // Prompts user for an input string
-    char response[99];
 
-    printf(prompt);
-    scanf("%s", &response);
+    printf("%s", prompt);
+    scanf("%s", external);
 
-    return &response;
+    return external;
 } 
 
 int getInt(char* prompt){
     // Prompts user for an input integer
     int response;
 
-    printf(prompt);
+    printf("%s", prompt);
     scanf("%d", &response);
 
     return response;
@@ -26,7 +25,7 @@ double getDouble(char* prompt){
     // Prompts user for an input double
     double response;
 
-    printf(prompt);
+    printf("%s", prompt);
     scanf("%lf", &response);
 
     return response;

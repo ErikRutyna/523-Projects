@@ -9,14 +9,15 @@
 int main(){
 
     // TODO POST FINISHED: Replace input process with JSON-based config file
-    char mesh;
-    double tolerance = pow(10, -6);
+    char mesh[50];
+    char* meshname;
     double AoA;
     double Minf;
     double altitude;
+    double tolerance = pow(10, -6);
 
     // Get the mesh file
-    mesh = *(getString("\nPlease enter the mesh (.gri) filename: "));
+    meshname = (getString(&mesh[0], "\nPlease enter the mesh (.gri) filename: "));
 
     // Get mach number
     Minf = getDouble("\nPlease enter the Mach number: ");
@@ -32,12 +33,12 @@ int main(){
     time_t startTime = time(NULL);
 
     // Simulation function
-    SupersonicCFD(*mesh, Minf, AoA, altitude, tolerance);
+    SupersonicCFD(meshname, Minf, AoA, altitude, tolerance);
 
     // Simulation end time
     time_t endTime = time(NULL);
 
-    printf("Time til convergence: %ld", startTime - endTime);
+    printf("\nTime til convergence: %ld\n", startTime - endTime);
 
     return 0;
 }

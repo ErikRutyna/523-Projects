@@ -15,9 +15,19 @@ Functions to prompt user for input parameters
 =============================================
 */
 
-char* getString(char* prompt); // Prompts user for an input string
+char* getString(char* external, char* prompt); // Prompts user for an input string
 int getInt(char* prompt); // Prompts user for an input integer
 double getDouble(char* prompt); // Prompts user for an input double
+
+/*
+====================================
+Atmospheric & Gas Dynamics Functions
+====================================
+*/
+
+double localPressure(double altitude); // Returns the local ambient pressure in Pascals (Pa) from given altitude (in meters)
+double localTemperature(double altitude); // Returns the local ambient temperature in Kelvin (K) from given altitude (in meters)
+
 
 
 
